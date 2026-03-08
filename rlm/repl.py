@@ -59,7 +59,10 @@ class REPLResult:
         self.execution_time = execution_time if execution_time is not None else 0.0
 
     def __str__(self):
-        return f"REPLResult(stdout={self.stdout}, stderr={self.stderr}, locals={self.locals}, execution_time={self.execution_time})"
+        return (
+            f"REPLResult(stdout={self.stdout}, stderr={self.stderr}, "
+            f"locals={self.locals}, execution_time={self.execution_time})"
+        )
 
 
 class REPLEnv:
@@ -122,7 +125,6 @@ context = '''{context_str}'''
         start_time = time.time()
 
         stdout_capture: list[str] = []
-        stderr_capture: list[str] = []
 
         def print_callback(text: str):
             stdout_capture.append(text)
