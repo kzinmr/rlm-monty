@@ -82,13 +82,19 @@ class REPLEnv:
         self.locals: dict[str, Any] = {}
         self._stdout_buffer = ""
         self._stderr_buffer = ""
-
-        self.sub_rlm: RLM = Sub_RLM(model=recursive_model)
+        self._sub_rlm: RLM | None = None
 
         self.load_context(context_json, context_str)
 
         if setup_code:
             self.code_execution(setup_code)
+
+    @property
+    def sub_rlm(self) -> RLM:
+        """Lazy initialization of Sub_RLM to avoid requiring API key at construction."""
+        if self._sub_rlm is None:
+            self._sub_rlm = Sub_RLM(model=self.recursive_model)
+        return self._sub_rlm
 
     def load_context(
         self,
@@ -97,17 +103,10 @@ class REPLEnv:
     ):
         """Load context data into the REPL environment."""
         if context_json is not None:
-            context_code = f"""
-import json
-context = {json.dumps(context_json)}
-"""
-            self.code_execution(context_code)
+            self.locals["context"] = context_json
 
         if context_str is not None:
-            context_code = f"""
-context = '''{context_str}'''
-"""
-            self.code_execution(context_code)
+            self.locals["context"] = context_str
 
     def _build_code_with_context(self, code: str, context_vars: dict[str, Any] | None = None) -> str:
         """Build the full code with context variables."""
@@ -126,7 +125,7 @@ context = '''{context_str}'''
 
         stdout_capture: list[str] = []
 
-        def print_callback(text: str):
+        def print_callback(stream: str, text: str):
             stdout_capture.append(text)
 
         full_code = self._build_code_with_context(code, self.locals.copy())
@@ -138,16 +137,14 @@ context = '''{context_str}'''
                 script_name="repl_exec.py",
             )
 
-            result = m.run(inputs={}, print_callback=print_callback)
+            result = m.run(print_callback=print_callback)
 
-            if isinstance(result, pydantic_monty.MontyComplete):
-                stdout_content = "\n".join(stdout_capture)
-                stderr_content = ""
-                if result.output is not None:
-                    stdout_content += f"\n{repr(result.output)}"
-            else:
-                stdout_content = "\n".join(stdout_capture)
-                stderr_content = "Execution did not complete"
+            stdout_content = "".join(stdout_capture)
+            stderr_content = ""
+
+            if result is not None:
+                stdout_content += f"\n{repr(result)}"
+                self.locals["_result"] = result
 
         except pydantic_monty.MontySyntaxError as e:
             stderr_content = f"Syntax Error: {e}"
